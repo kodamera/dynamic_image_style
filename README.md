@@ -2,6 +2,21 @@
 This module enables developers to use dynamically generated image styles (based
 on given settings) in twig templates.
 
+## Installation
+1. Add the repository to the project's composer.json:
+```
+{
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/kodamera/dynamic_image_style"
+        }
+    ]
+}
+```
+2. Install the module `$ composer require kodamera/dynamic_image_style`
+3. Enable the module `$ drush en dynamic_image_style`
+
 ## Settings syntax
 Settings use a single letter suffix for each type of setting.
 The letter is preceded by the config for the specific setting.
