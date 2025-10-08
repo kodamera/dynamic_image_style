@@ -1,0 +1,15 @@
+services:
+  dynamic_image_style.helper:
+    class: Drupal\dynamic_image_style\DynamicImageStyleHelper
+    arguments:
+      - '@module_handler'
+      - '@cache.default'
+
+  dynamic_image_style.twig_extension:
+    class: Drupal\dynamic_image_style\DynamicImageStyleTwigExtension
+    arguments:
+      - '@dynamic_image_style.helper'
+      - '@file_url_generator'
+      - '@cache.default'
+    tags:
+      - { name: twig.extension }

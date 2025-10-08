@@ -1,0 +1,53 @@
+<?php
+
+/**
+ * @file
+ * Module file for dynamic_image_style.
+ *
+ * @author Kodamera AB <info@kodamera.se>
+ */
+
+use Drupal\crop\CropInterface;
+
+/**
+ * Implements hook_page_attachments().
+ */
+function dynamic_image_style_page_attachments(array &$attachments): void {
+  // Add container aware script to all pages.
+  $attachments['#attached']['library'][] = 'dynamic_image_style/container_aware';
+}
+
+/**
+ * Implements hook_ENTITY_TYPE_update() for crop entities.
+ *
+ * This hook will flush our dynamic image style derivatives when a focal point
+ * is changed.
+ *
+ * Changing a focal point will update the crop entity. From the crop entity we
+ * get the image URI. We then loop through all our dynamic image styles (which
+ * are conveniently cached) and recreate the image styles (in memory) to be able
+ * to flush them.
+ */
+function dynamic_image_style_crop_update(CropInterface $crop_entity): void {
+  $image_uri = $crop_entity->get('uri')->value;
+  if (!$image_uri) {
+    return;
+  }
+
+  $cache = \Drupal::cache()->get('dynamic_image_style:valid_settings');
+  if (!$cache) {
+    return;
+  }
+
+  $valid_settings = $cache->data;
+
+  /** @var \Drupal\dynamic_image_style\DynamicImageStyleHelper $dynamic_image_style_helper */
+  $dynamic_image_style_helper = \Drupal::service('dynamic_image_style.helper');
+
+  foreach ($valid_settings as $settings) {
+    $image_style = $dynamic_image_style_helper->createImageStyle($settings);
+    if ($image_style->supportsUri($image_uri)) {
+      $image_style->flush($image_uri);
+    }
+  }
+}

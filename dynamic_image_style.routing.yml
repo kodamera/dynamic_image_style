@@ -1,0 +1,17 @@
+dynamic_image_style.deliver:
+  path: '/dynamic-image-style/{file}/{settings}'
+  defaults:
+    _controller: '\Drupal\dynamic_image_style\Controller\DynamicImageStyleController::deliver'
+    _disable_route_normalizer: 'TRUE'
+  requirements:
+    _permission: 'access content'
+  options:
+    parameters:
+      file:
+        description: 'The file object loaded from ID in the path.'
+        required: true
+        type: entity:file
+      settings:
+        description: 'The settings for the image style.'
+        required: true
+        type: string

@@ -1,0 +1,4 @@
+container_aware:
+  version: VERSION
+  js:
+    js/container_aware.js: { }
