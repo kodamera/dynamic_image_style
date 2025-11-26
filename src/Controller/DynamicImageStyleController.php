@@ -98,8 +98,18 @@ class DynamicImageStyleController extends ControllerBase {
         // since this URL is not a standard image style URL. Instead, we have to
         // handle fetching via stage file proxy manually.
         // The code below is inspired by its ProxySubscriber class.
-        /** @var \Drupal\stage_file_proxy\FetchManagerInterface $stage_file_proxy_fetch_manager */
-        $stage_file_proxy_fetch_manager = \Drupal::service('stage_file_proxy.fetch_manager');
+
+        // Stage file proxy service name changed in 3.x. We need to support
+        // both.
+        if (\Drupal::hasService('stage_file_proxy.download_manager')) {
+          /** @var \Drupal\stage_file_proxy\FetchManagerInterface $stage_file_proxy_fetch_manager */
+          $stage_file_proxy_fetch_manager = \Drupal::service('stage_file_proxy.download_manager');
+        }
+        // Fall back to old service name (2.x).
+        elseif (\Drupal::hasService('stage_file_proxy.fetch_manager')) {
+          /** @var \Drupal\stage_file_proxy\FetchManagerInterface $stage_file_proxy_fetch_manager */
+          $stage_file_proxy_fetch_manager = \Drupal::service('stage_file_proxy.fetch_manager');
+        }
 
         $stage_file_proxy_config = \Drupal::config('stage_file_proxy.settings');
 
