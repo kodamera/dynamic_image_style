@@ -153,7 +153,9 @@ class DynamicImageStyleHelper {
     // Multiply width and height if multipler is set.
     if (array_key_exists('x', $settings)) {
       $multiplier = $settings['x'];
-      $settings['w'] *= $multiplier;
+      if (isset($settings['w'])) {
+        $settings['w'] *= $multiplier;
+      }
       if (isset($settings['h'])) {
         $settings['h'] *= $multiplier;
       }
