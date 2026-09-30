@@ -5,6 +5,7 @@ dynamic_image_style.deliver:
     _disable_route_normalizer: 'TRUE'
   requirements:
     _permission: 'access content'
+    _entity_access: 'file.download'
   options:
     parameters:
       file:

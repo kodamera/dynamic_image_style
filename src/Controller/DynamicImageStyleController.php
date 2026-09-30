@@ -2,16 +2,19 @@
 
 namespace Drupal\dynamic_image_style\Controller;
 
-use Drupal\Core\Cache\CacheBackendInterface;
+use Drupal\Component\Utility\Crypt;
 use Drupal\Core\Controller\ControllerBase;
 use Drupal\Core\Image\ImageFactory;
+use Drupal\Core\Lock\LockBackendInterface;
 use Drupal\Core\StreamWrapper\StreamWrapperManager;
 use Drupal\dynamic_image_style\DynamicImageStyleHelper;
 use Drupal\file\FileInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
+use Symfony\Component\HttpKernel\Exception\ServiceUnavailableHttpException;
 
 /**
  * Dynamic image style controller.
@@ -19,6 +22,15 @@ use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
  * @author Kodamera AB <info@kodamera.se>
  */
 class DynamicImageStyleController extends ControllerBase {
+
+  /**
+   * How long browsers and proxies may cache public images, in seconds.
+   *
+   * The URL only contains the file ID and the settings, so it stays the same
+   * when a focal point changes. Keep this short enough for such changes to
+   * show up within reasonable time.
+   */
+  const MAX_AGE = 604800;
 
   /**
    * The dynamic image style helper.
@@ -35,17 +47,17 @@ class DynamicImageStyleController extends ControllerBase {
   protected ImageFactory $imageFactory;
 
   /**
-   * The default cache backend.
+   * The lock backend.
    */
-  protected CacheBackendInterface $cache;
+  protected LockBackendInterface $lock;
 
   /**
    * DynamicImageStyleController constructor.
    */
-  public function __construct(DynamicImageStyleHelper $dynamic_image_style_helper, ImageFactory $image_factory, CacheBackendInterface $cache) {
+  public function __construct(DynamicImageStyleHelper $dynamic_image_style_helper, ImageFactory $image_factory, LockBackendInterface $lock) {
     $this->dynamicImageStyleHelper = $dynamic_image_style_helper;
     $this->imageFactory = $image_factory;
-    $this->cache = $cache;
+    $this->lock = $lock;
   }
 
   /**
@@ -55,7 +67,7 @@ class DynamicImageStyleController extends ControllerBase {
     return new static(
       $container->get('dynamic_image_style.helper'),
       $container->get('image.factory'),
-      $container->get('cache.default'),
+      $container->get('lock'),
     );
   }
 
@@ -67,24 +79,18 @@ class DynamicImageStyleController extends ControllerBase {
    * @param string $settings
    *   The settings for the image style.
    *
-   * @return \Symfony\Component\HttpFoundation\BinaryFileResponse|null
-   *   The response with the image, or NULL if it could not be generated.
+   * @return \Symfony\Component\HttpFoundation\BinaryFileResponse
+   *   The response with the image.
    */
-  public function deliver(FileInterface $file, string $settings): ?BinaryFileResponse {
+  public function deliver(FileInterface $file, string $settings): BinaryFileResponse {
     // To avoid DoS attacks, we only allow image style settings generated from
     // our Twig filters. The filters store all used settings in the cache. So if
     // it's not in the cache, it's not valid.
-    $cid = 'dynamic_image_style:valid_settings';
-    $cache = $this->cache->get($cid);
-    if (!$cache || !in_array($settings, $cache->data, TRUE)) {
+    if (!$this->dynamicImageStyleHelper->isValidSettings($settings)) {
       throw new BadRequestHttpException('Invalid image style settings.');
     }
 
     $image_style = $this->dynamicImageStyleHelper->createImageStyle($settings);
-
-    if (!$image_style === NULL) {
-      throw new BadRequestHttpException(sprintf('Could not load image style %s.', $settings));
-    }
 
     if (!$image_style->supportsUri($file->getFileUri())) {
       throw new BadRequestHttpException(sprintf('Could not apply image style %s.', $settings));
@@ -135,7 +141,18 @@ class DynamicImageStyleController extends ControllerBase {
     }
 
     if (!file_exists($image_style_uri)) {
-      $image_style->createDerivative($file->getFileUri(), $image_style_uri);
+      // Don't let concurrent requests generate the same derivative. The lock
+      // name follows core's ImageStyleDownloadController.
+      $lock_name = 'dynamic_image_style_deliver:' . $image_style->id() . ':' . Crypt::hashBase64($file->getFileUri());
+      if (!$this->lock->acquire($lock_name)) {
+        throw new ServiceUnavailableHttpException(3, 'Image generation in progress. Try again shortly.');
+      }
+      $success = file_exists($image_style_uri) || $image_style->createDerivative($file->getFileUri(), $image_style_uri);
+      $this->lock->release($lock_name);
+
+      if (!$success) {
+        throw new HttpException(500, sprintf('Could not generate image style %s.', $settings));
+      }
     }
 
     $image = $this->imageFactory->get($image_style_uri);
@@ -145,7 +162,20 @@ class DynamicImageStyleController extends ControllerBase {
       'Content-Length' => $image->getFileSize(),
     ];
 
-    return new BinaryFileResponse($image->getSource(), 200, $headers, TRUE);
+    $response = new BinaryFileResponse($image->getSource(), 200, $headers, FALSE);
+
+    if (StreamWrapperManager::getScheme($file->getFileUri()) === 'private') {
+      $response->setPrivate();
+    }
+    else {
+      $response->setPublic();
+      $response->setMaxAge(self::MAX_AGE);
+      // Drupal adds an Expires header in the past to responses without one,
+      // which makes browsers revalidate on every page view.
+      $response->setExpires(new \DateTime('@' . (time() + self::MAX_AGE)));
+    }
+
+    return $response;
   }
 
 }
