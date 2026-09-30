@@ -34,17 +34,10 @@ function dynamic_image_style_crop_update(CropInterface $crop_entity): void {
     return;
   }
 
-  $cache = \Drupal::cache()->get('dynamic_image_style:valid_settings');
-  if (!$cache) {
-    return;
-  }
-
-  $valid_settings = $cache->data;
-
   /** @var \Drupal\dynamic_image_style\DynamicImageStyleHelper $dynamic_image_style_helper */
   $dynamic_image_style_helper = \Drupal::service('dynamic_image_style.helper');
 
-  foreach ($valid_settings as $settings) {
+  foreach ($dynamic_image_style_helper->getValidSettings() as $settings) {
     $image_style = $dynamic_image_style_helper->createImageStyle($settings);
     if ($image_style->supportsUri($image_uri)) {
       $image_style->flush($image_uri);

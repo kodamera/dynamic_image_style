@@ -2,7 +2,6 @@
 
 namespace Drupal\dynamic_image_style;
 
-use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Url;
 use Twig\Extension\AbstractExtension;
@@ -26,17 +25,11 @@ class DynamicImageStyleTwigExtension extends AbstractExtension {
   protected FileUrlGeneratorInterface $fileUrlGenerator;
 
   /**
-   * The default cache backend.
-   */
-  protected CacheBackendInterface $cache;
-
-  /**
    * Constructs the DynamicImageStyleTwigExtension object.
    */
-  public function __construct(DynamicImageStyleHelper $dynamic_image_style_helper, FileUrlGeneratorInterface $file_url_generator, CacheBackendInterface $cache) {
+  public function __construct(DynamicImageStyleHelper $dynamic_image_style_helper, FileUrlGeneratorInterface $file_url_generator) {
     $this->dynamicImageStyleHelper = $dynamic_image_style_helper;
     $this->fileUrlGenerator = $file_url_generator;
-    $this->cache = $cache;
   }
 
   /**
@@ -114,9 +107,7 @@ class DynamicImageStyleTwigExtension extends AbstractExtension {
       'settings' => $settings,
     ]);
 
-    $valid_settings = $this->getValidSettings();
-    $valid_settings[$settings] = $settings;
-    $this->setValidSettings($valid_settings);
+    $this->dynamicImageStyleHelper->addValidSettings($settings);
 
     return $url->toString();
   }
@@ -141,11 +132,9 @@ class DynamicImageStyleTwigExtension extends AbstractExtension {
       return NULL;
     }
 
-    $valid_settings = $this->getValidSettings();
-
     // Always include 1x version.
     $settings_1x = $settings . '_1x';
-    $valid_settings[$settings_1x] = $settings_1x;
+    $this->dynamicImageStyleHelper->addValidSettings($settings_1x);
     $urls = [
       Url::fromRoute('dynamic_image_style.deliver', [
         'file' => $file_id,
@@ -160,31 +149,10 @@ class DynamicImageStyleTwigExtension extends AbstractExtension {
         'settings' => $settings_multiplier,
       ])->toString();
       $urls[] = "$url {$multiplier}x";
-      $valid_settings[$settings_multiplier] = $settings_multiplier;
+      $this->dynamicImageStyleHelper->addValidSettings($settings_multiplier);
     }
 
-    $this->setValidSettings($valid_settings);
-
     return implode(', ', $urls);
-  }
-
-  /**
-   * Get valid settings cache.
-   *
-   * To avoid DoS we store all valid settings (originating from Twig) in cache.
-   */
-  protected function getValidSettings(): array {
-    $cache = $this->cache->get('dynamic_image_style:valid_settings');
-    return $cache ? $cache->data : [];
-  }
-
-  /**
-   * Set valid settings cache.
-   *
-   * To avoid DoS we store all valid settings (originating from Twig) in cache.
-   */
-  protected function setValidSettings(array $valid_settings): void {
-    $this->cache->set('dynamic_image_style:valid_settings', $valid_settings);
   }
 
 }
