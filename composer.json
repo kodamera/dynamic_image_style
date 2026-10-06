@@ -31,7 +31,7 @@
     },
     "extra": {
         "drupal": {
-            "version": "2.x-dev",
+            "version": "1.x-dev",
             "datestamp": "1633680000",
             "security-coverage": {
                 "status": "not-covered",
