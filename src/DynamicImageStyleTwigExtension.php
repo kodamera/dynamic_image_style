@@ -2,7 +2,6 @@
 
 namespace Drupal\dynamic_image_style;
 
-use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\File\FileUrlGeneratorInterface;
 use Drupal\Core\Url;
 use Twig\Extension\AbstractExtension;
@@ -26,17 +25,11 @@ class DynamicImageStyleTwigExtension extends AbstractExtension {
   protected FileUrlGeneratorInterface $fileUrlGenerator;
 
   /**
-   * The default cache backend.
-   */
-  protected CacheBackendInterface $cache;
-
-  /**
    * Constructs the DynamicImageStyleTwigExtension object.
    */
-  public function __construct(DynamicImageStyleHelper $dynamic_image_style_helper, FileUrlGeneratorInterface $file_url_generator, CacheBackendInterface $cache) {
+  public function __construct(DynamicImageStyleHelper $dynamic_image_style_helper, FileUrlGeneratorInterface $file_url_generator) {
     $this->dynamicImageStyleHelper = $dynamic_image_style_helper;
     $this->fileUrlGenerator = $file_url_generator;
-    $this->cache = $cache;
   }
 
   /**
@@ -69,6 +62,11 @@ class DynamicImageStyleTwigExtension extends AbstractExtension {
 
     if (!$path) {
       trigger_error('Image path is empty.');
+      return NULL;
+    }
+
+    if (!DynamicImageStyleHelper::isValidSettingsString($settings_string)) {
+      trigger_error(sprintf('Invalid image style settings %s.', $settings_string));
       return NULL;
     }
 
@@ -109,16 +107,17 @@ class DynamicImageStyleTwigExtension extends AbstractExtension {
       return NULL;
     }
 
-    $url = Url::fromRoute('dynamic_image_style.deliver', [
+    if (!DynamicImageStyleHelper::isValidSettingsString($settings)) {
+      trigger_error(sprintf('Invalid image style settings %s.', $settings));
+      return NULL;
+    }
+
+    $this->dynamicImageStyleHelper->addValidSettings($settings);
+
+    return Url::fromRoute('dynamic_image_style.deliver', [
       'file' => $file_id,
       'settings' => $settings,
-    ]);
-
-    $valid_settings = $this->getValidSettings();
-    $valid_settings[$settings] = $settings;
-    $this->setValidSettings($valid_settings);
-
-    return $url->toString();
+    ])->toString();
   }
 
   /**
@@ -141,50 +140,25 @@ class DynamicImageStyleTwigExtension extends AbstractExtension {
       return NULL;
     }
 
-    $valid_settings = $this->getValidSettings();
-
     // Always include 1x version.
-    $settings_1x = $settings . '_1x';
-    $valid_settings[$settings_1x] = $settings_1x;
-    $urls = [
-      Url::fromRoute('dynamic_image_style.deliver', [
-        'file' => $file_id,
-        'settings' => $settings_1x,
-      ])->toString() . ' 1x',
-    ];
-
-    foreach ($multipliers as $multiplier) {
+    $urls = [];
+    foreach (array_merge([1], $multipliers) as $multiplier) {
       $settings_multiplier = $settings . '_' . $multiplier . 'x';
+      if (!DynamicImageStyleHelper::isValidSettingsString($settings_multiplier)) {
+        trigger_error(sprintf('Invalid image style settings %s.', $settings_multiplier));
+        return NULL;
+      }
+
+      $this->dynamicImageStyleHelper->addValidSettings($settings_multiplier);
+
       $url = Url::fromRoute('dynamic_image_style.deliver', [
         'file' => $file_id,
         'settings' => $settings_multiplier,
       ])->toString();
       $urls[] = "$url {$multiplier}x";
-      $valid_settings[$settings_multiplier] = $settings_multiplier;
     }
 
-    $this->setValidSettings($valid_settings);
-
     return implode(', ', $urls);
-  }
-
-  /**
-   * Get valid settings cache.
-   *
-   * To avoid DoS we store all valid settings (originating from Twig) in cache.
-   */
-  protected function getValidSettings(): array {
-    $cache = $this->cache->get('dynamic_image_style:valid_settings');
-    return $cache ? $cache->data : [];
-  }
-
-  /**
-   * Set valid settings cache.
-   *
-   * To avoid DoS we store all valid settings (originating from Twig) in cache.
-   */
-  protected function setValidSettings(array $valid_settings): void {
-    $this->cache->set('dynamic_image_style:valid_settings', $valid_settings);
   }
 
 }

@@ -1,0 +1,35 @@
+<?php
+
+/**
+ * @file
+ * Install, update and uninstall functions for dynamic_image_style.
+ *
+ * @author Kodamera AB <info@kodamera.se>
+ */
+
+use Drupal\dynamic_image_style\DynamicImageStyleHelper;
+
+/**
+ * Implements hook_uninstall().
+ */
+function dynamic_image_style_uninstall(): void {
+  \Drupal::keyValue(DynamicImageStyleHelper::VALID_SETTINGS_COLLECTION)->deleteAll();
+  \Drupal::cache()->delete(DynamicImageStyleHelper::LEGACY_VALID_SETTINGS_CID);
+}
+
+/**
+ * Move valid settings from the cache to key value storage.
+ */
+function dynamic_image_style_update_10001(): void {
+  $cache = \Drupal::cache()->get(DynamicImageStyleHelper::LEGACY_VALID_SETTINGS_CID);
+  if (!$cache) {
+    return;
+  }
+
+  $store = \Drupal::keyValue(DynamicImageStyleHelper::VALID_SETTINGS_COLLECTION);
+  foreach ($cache->data as $settings) {
+    if (is_string($settings) && DynamicImageStyleHelper::isValidSettingsString($settings)) {
+      $store->setIfNotExists($settings, TRUE);
+    }
+  }
+}
