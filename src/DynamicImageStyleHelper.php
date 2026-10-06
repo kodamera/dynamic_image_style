@@ -39,7 +39,7 @@ class DynamicImageStyleHelper {
   /**
    * The key value store holding all valid settings strings.
    */
-  protected ?KeyValueStoreInterface $validSettingsStore;
+  protected KeyValueStoreInterface $validSettingsStore;
 
   /**
    * Valid settings strings already stored, loaded once per request.
@@ -51,10 +51,10 @@ class DynamicImageStyleHelper {
   /**
    * Constructs the DynamicImageStyleHelper object.
    */
-  public function __construct(ModuleHandlerInterface $module_handler, CacheBackendInterface $cache, ?KeyValueFactoryInterface $key_value_factory = NULL) {
+  public function __construct(ModuleHandlerInterface $module_handler, CacheBackendInterface $cache, KeyValueFactoryInterface $key_value_factory) {
     $this->moduleHandler = $module_handler;
     $this->cache = $cache;
-    $this->validSettingsStore = $key_value_factory?->get(self::VALID_SETTINGS_COLLECTION);
+    $this->validSettingsStore = $key_value_factory->get(self::VALID_SETTINGS_COLLECTION);
   }
 
   /**
@@ -82,7 +82,7 @@ class DynamicImageStyleHelper {
       elseif (preg_match('/^(0|[1-9]\d*)(\.\d+)?x$/', $part) && (float) $part > 0) {
         $key = 'x';
       }
-      elseif (preg_match('/^[1-9]\d*x[1-9]\d*r$/', $part)) {
+      elseif (preg_match('/^((0|[1-9]\d*)(\.\d+)?)x((0|[1-9]\d*)(\.\d+)?)r$/', $part, $matches) && (float) $matches[1] > 0 && (float) $matches[4] > 0) {
         $key = 'r';
       }
       else {
@@ -118,7 +118,7 @@ class DynamicImageStyleHelper {
       return FALSE;
     }
 
-    if (isset($this->storedValidSettings[$settings]) || $this->validSettingsStore?->has($settings)) {
+    if (isset($this->storedValidSettings[$settings]) || $this->validSettingsStore->has($settings)) {
       return TRUE;
     }
 
@@ -140,12 +140,7 @@ class DynamicImageStyleHelper {
    *   The valid settings strings.
    */
   public function getValidSettings(): array {
-    if ($this->validSettingsStore) {
-      return array_keys($this->validSettingsStore->getAll());
-    }
-
-    $cache = $this->cache->get(self::LEGACY_VALID_SETTINGS_CID);
-    return $cache ? array_values($cache->data) : [];
+    return array_keys($this->validSettingsStore->getAll());
   }
 
   /**
@@ -302,21 +297,13 @@ class DynamicImageStyleHelper {
    *   The settings string.
    */
   public function addValidSettings(string $settings): void {
-    if ($this->validSettingsStore) {
-      // Load all stored settings once, so rendering many images only writes
-      // the settings that are new.
-      $this->storedValidSettings ??= $this->validSettingsStore->getAll();
-      if (!isset($this->storedValidSettings[$settings])) {
-        $this->validSettingsStore->setIfNotExists($settings, TRUE);
-        $this->storedValidSettings[$settings] = TRUE;
-      }
-      return;
+    // Load all stored settings once, so rendering many images only writes the
+    // settings that are new.
+    $this->storedValidSettings ??= $this->validSettingsStore->getAll();
+    if (!isset($this->storedValidSettings[$settings])) {
+      $this->validSettingsStore->setIfNotExists($settings, TRUE);
+      $this->storedValidSettings[$settings] = TRUE;
     }
-
-    $cache = $this->cache->get(self::LEGACY_VALID_SETTINGS_CID);
-    $valid_settings = $cache ? $cache->data : [];
-    $valid_settings[$settings] = $settings;
-    $this->cache->set(self::LEGACY_VALID_SETTINGS_CID, $valid_settings);
   }
 
 }

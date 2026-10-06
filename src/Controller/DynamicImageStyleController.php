@@ -31,8 +31,10 @@ class DynamicImageStyleController extends ControllerBase {
    * How long browsers and proxies may cache public derivatives, in seconds.
    *
    * Matches the two weeks that Drupal's .htaccess sets for static files, which
-   * is how regular image style derivatives are served. Derivatives are flushed
-   * when a focal point changes, so this is kept short of a year.
+   * is how regular image style derivatives are served. The URL only contains
+   * the file ID and the settings, so it stays the same when a focal point
+   * changes and the derivative is flushed. Browsers keep showing the old crop
+   * until this runs out, so keep it short.
    */
   const MAX_AGE = 1209600;
 
@@ -155,10 +157,12 @@ class DynamicImageStyleController extends ControllerBase {
 
     $image = $this->imageFactory->get($image_style_uri);
 
-    $headers += [
+    // Headers from hook_file_download() describe the original file, but the
+    // derivative is always WebP, so ours take precedence.
+    $headers = [
       'Content-Type' => $image->getMimeType(),
       'Content-Length' => $image->getFileSize(),
-    ];
+    ] + $headers;
 
     $response = new BinaryFileResponse($image->getSource(), 200, $headers, $is_public);
 
